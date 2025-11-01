@@ -20,8 +20,6 @@ env:
   REPO_BRANCH: 24.10-6.12
   FEEDS_CONF: feeds.conf.default
   CONFIG_FILE_IMM: ./config/axt1800.config
-  CONFIG_FILE_DOCKER: ./config/docker.config
-  CONFIG_FILE_ISTORE: ./config/istore.config
   DIY_P1_SH: ./sh/scripts-part1.sh
   DIY_P2_SH: ./sh/scripts-part2.sh
   DEFAULT_SETTING: ./default-settings
@@ -60,7 +58,7 @@ jobs:
         os_swap: "True"
 
 
-    - name: [CHINESE_TEXT]
+    - name: Install build dependencies
       env:
         DEBIAN_FRONTEND: noninteractive
       run: |
@@ -78,7 +76,7 @@ jobs:
           echo "TAG2=${{ github.event.inputs.tag2 }}" | tr ' ' '_' >> $GITHUB_ENV
 
 
-    - name: [CHINESE_TEXT]
+    - name: Clone OpenWrt source code
       working-directory: /workdir
       run: |
         df -hT $PWD
@@ -87,16 +85,16 @@ jobs:
         ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
         cd openwrt
         
-        # GitHub Action [CHINESE_TEXT]
+        # Remove Chinese mirrors from mirror file
         PROJECT_MIRRORS_FILE="./scripts/projectsmirrors.json"
           if [ -f "$PROJECT_MIRRORS_FILE" ]; then
             sed -i '/.cn\//d; /tencent/d; /aliyun/d' "$PROJECT_MIRRORS_FILE"
           fi
         
-        git fetch --tags # [CHINESE_TEXT]
+        git fetch --tags # Get all tags
         echo "OPENWRT_PATH=$PWD" >> $GITHUB_ENV
         
-    - name: [CHINESE_TEXT]
+    - name: Load custom feeds and run part 1 script
       run: |
         echo "WORKFLOW_NAME=AXT-1800" | tr ' ' '_' >> $GITHUB_OUTPUT
         cat $GITHUB_OUTPUT
@@ -107,13 +105,10 @@ jobs:
         ./scripts/feeds update -a
         $GITHUB_WORKSPACE/$DIY_P1_SH
 
-    #- name: [CHINESE_TEXT]
-    #  run: cd openwrt && ./scripts/feeds update -a
-
-    - name: [CHINESE_TEXT]
+    - name: Install all feeds
       run: cd openwrt && ./scripts/feeds install -a
 
-    - name: [CHINESE_TEXT]
+    - name: Load custom configuration and run part 2 script
       run: |
         echo "WORKFLOW_NAME=AXT-1800" | tr ' ' '_' >> $GITHUB_OUTPUT
         cat $GITHUB_OUTPUT
@@ -125,10 +120,10 @@ jobs:
         cd openwrt
         $GITHUB_WORKSPACE/$DIY_P2_SH
         make defconfig
-        echo "[CHINESE_TEXT]diffconfig:"
+        echo "Final diffconfig:"
         ./scripts/diffconfig.sh    
 
-    - name: Cache Toolchain([CHINESE_TEXT])
+    - name: Cache Toolchain (Cache build environment)
       uses: HiGarfield/cachewrtbuild@main
       if: env.CACHE_TOOLCHAIN != 'false'
       with:
@@ -136,7 +131,7 @@ jobs:
         mixkey: ${{ github.workflow }}-${{ env.REPO_BRANCH }}-${{ hashFiles(env.CONFIG_FILE_IMM, '**/scripts-part*.sh') }}
         prefix: ${{ env.OPENWRT_PATH }}
     
-    - name: [CHINESE_TEXT]
+    - name: Download packages
       id: package
       run: |
          cd openwrt
@@ -144,11 +139,11 @@ jobs:
          find dl -size -1024c -exec ls -l {} \;
          find dl -size -1024c -exec rm -f {} \;
 
-    - name: [CHINESE_TEXT]
+    - name: Compile firmware
       id: compile
       run: |
         cd openwrt
-        echo -e "$(nproc) [CHINESE_TEXT]"
+        echo -e "$(nproc) cores for compilation"
         echo "y" | make -j$(expr $(nproc) + 1) || echo "y" | make -j1 V=s
         echo "compile-status=success" >> $GITHUB_ENV
         grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
@@ -160,18 +155,18 @@ jobs:
         fi
         echo "file-date=$(date +"%Y%m%d%H%M")" >> $GITHUB_OUTPUT
 
-    - name: [CHINESE_TEXT]
+    - name: Check disk space after build
       if: (!cancelled())
       run: df -hT
 
-    - name: [CHINESE_TEXT] bin [CHINESE_TEXT]
+    - name: Upload bin directory
       uses: actions/upload-artifact@main
       if: steps.compile.outputs.compile == 'success' && env.UPLOAD_BIN_DIR == 'true'
       with:
         name: OpenWrt_bin_${{ steps.compile.outputs.device-name }}_${{ steps.compile.outputs.file-date }}
         path: openwrt/bin
 
-    - name: [CHINESE_TEXT]
+    - name: Organize firmware files
       id: organize
       if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
       run: |
@@ -182,31 +177,31 @@ jobs:
         echo "organize=success" >> $GITHUB_OUTPUT
         cat $GITHUB_ENV
 
-    - name: [CHINESE_TEXT]
+    - name: Upload firmware
       uses: actions/upload-artifact@main
       if: steps.organize.outputs.organize == 'success' && !cancelled()
       with:
         name: OpenWrt_firmware${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
         path: ${{ env.FIRMWARE }}
 
-    - name: [CHINESE_TEXT]
+    - name: Generate release tag
       id: tag
       if: steps.compile.outputs.compile == 'success' && env.UPLOAD_RELEASE == 'true'
       run: |
-        echo "[CHINESE_TEXT]..."
+        echo "Generating tag..."
         CLEANED_WORKFLOW_NAME=$(echo "$WORKFLOW_NAME" | tr -c '[:alnum:]_' '-')
         CLEANED_TAG2=$(echo "$TAG2" | tr -c '[:alnum:].-' '-')
         BASE_TAG="${CLEANED_WORKFLOW_NAME}-${CLEANED_TAG2}"
         DATE_SUFFIX=$(date +"%Y%m%d-%H%M")
         RELEASE_TAG="${BASE_TAG}-${DATE_SUFFIX}"
         if [ -z "$RELEASE_TAG" ]; then
-            echo "[CHINESE_TEXT]：[CHINESE_TEXT]。[CHINESE_TEXT]。"
+            echo "Error: Release tag is empty. Exiting."
             exit 1
         fi
         echo "release_tag=$RELEASE_TAG" >> $GITHUB_ENV
         touch release.txt
         echo "tag=success" >> $GITHUB_OUTPUT
-        echo "[CHINESE_TEXT]: $RELEASE_TAG"
+        echo "Release Tag: $RELEASE_TAG"
 
     - name: Release Firmware
       uses: softprops/action-gh-release@v2
@@ -214,7 +209,7 @@ jobs:
         tag_name: immortalwrt_gl-axt1800-nss-${{ env.release_tag }}
         files: ${{ env.FIRMWARE }}/*
         body: |
-          [CHINESE_TEXT]：${{ env.REPO_URL_IMM }}
+          Source: ${{ env.REPO_URL_IMM }}
 
     - name: Delete workflow runs
       uses: GitRML/delete-workflow-runs@main
@@ -230,5 +225,3 @@ jobs:
         delete_tags: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  
-  
