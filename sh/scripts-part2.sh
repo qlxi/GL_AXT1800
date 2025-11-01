@@ -17,7 +17,7 @@ TARGET_DIR="$PWD/package"
 # Repositories to clone
 declare -A REPOS=(
     ["https://github.com/chenmozhijin/turboacc"]="" # turboacc (Network acceleration)
-    ["https://github.com/m0eak/fancontrol"]="" # fancontrol (Fan control)
+    ["https://github.com/fanteral/luci-app-fancontrol"]="" # fancontrol (Fan control)
     ["https://github.com/sirpdboy/luci-app-partexp"]="" # partexp (Partition expansion utility)
 )
 
