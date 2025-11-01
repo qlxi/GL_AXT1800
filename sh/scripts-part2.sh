@@ -19,6 +19,7 @@ declare -A REPOS=(
     ["https://github.com/chenmozhijin/turboacc"]="" # turboacc (Network acceleration)
     ["https://github.com/fanteral/luci-app-fancontrol"]="" # fancontrol (Fan control)
     ["https://github.com/sirpdboy/luci-app-partexp"]="" # partexp (Partition expansion utility)
+    ["https://github.com/immortalwrt/homeproxy"]="" # homeproxy (Proxy platform)
 )
 
 # Function to clone a repository
