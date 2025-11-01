@@ -2,16 +2,16 @@
 sleep 10s
 if [ -x "$(command -v opkg)" ]; then
     PACKAGE_MANAGER="opkg list-installed"
-    echo "opkg package manager detected." >&2
+    echo "opkg package manager detected." [cite: 1] >&2
 elif [ -x "$(command -v apk)" ];
 then
     PACKAGE_MANAGER="apk list --installed"
-    echo "apk package manager detected." >&2
+    echo "apk package manager detected." [cite: 2] >&2
 else
-    echo "No supported package manager (opkg, apk) found." >&2
+    echo "No supported package manager (opkg, apk) found."  >&2
     exit 1
 fi
-until [ "$( $PACKAGE_MANAGER 2>/dev/null| grep -c "^kernel")" -ne '0' ];
+until [ "$( $PACKAGE_MANAGER 2>/dev/null| grep -c "^kernel")" -ne '0' ]; [cite: 4]
 do
   sleep 1
 done
@@ -34,7 +34,7 @@ grep -c "^luci-app-fancontrol")" -ne '0' ] && [ "$(grep -c "AXT1800" /etc/board.
   uci set fancontrol.settings.start_temp='70'
   uci commit fancontrol
   /etc/init.d/fancontrol restart
-  echo "0 20 * * * uci set fancontrol.settings.start_temp='75' && uci commit fancontrol && /etc/init.d/fancontrol restart" >> /etc/crontabs/root
+  echo "0 20 * * * uci set fancontrol.settings.start_temp='75' && uci commit fancontrol && /etc/init.d/fancontrol restart" >> [cite: 6] /etc/crontabs/root
   echo "30 9 * * * uci set fancontrol.settings.start_temp='65' && uci commit fancontrol && /etc/init.d/fancontrol restart" >> /etc/crontabs/root
 fi
 
@@ -44,7 +44,8 @@ uci commit
 #  echo "net.netfilter.nf_conntrack_max=65535" >> /etc/sysctl.conf
 #  /etc/init.d/network restart
 #fi
-if [ "$( $PACKAGE_MANAGER 2>/dev/null| grep -c "turboacc")" 
+if [ "$( $PACKAGE_MANAGER 2>/dev/null|
+grep -c "turboacc")" [cite: 7] 
 -ne '0' ] && [ "$(grep -c "AXT1800" /etc/board.json)" -ne '0' ];then
   uci set turboacc.config.fullcone_nat6='0'
   uci set turboacc.config.bbr_cca='0'
@@ -61,7 +62,8 @@ if [ -e /sys/class/leds/white:system/brightness ] && [ "$(grep -c "30 23 * * * e
   echo "30 23 * * * echo 0 > /sys/class/leds/white:system/brightness" >> /etc/crontabs/root
 fi
 
-if [ -e /sys/class/leds/white:system/brightness ] && [ "$(grep -c "00 05 * * * echo "1" > /sys/class/leds/white:system/brightness" /etc/crontabs/root)" -eq '0' ];then
+if [ -e /sys/class/leds/white:system/brightness 
+[cite: 8] ] && [ "$(grep -c "00 05 * * * echo "1" > /sys/class/leds/white:system/brightness" /etc/crontabs/root)" -eq '0' ];then
   echo "00 05 * * * echo 1 > /sys/class/leds/white:system/brightness" >> /etc/crontabs/root
 fi
 
