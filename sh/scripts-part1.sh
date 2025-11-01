@@ -53,6 +53,9 @@ if [ "$(grep -c "AXT-1800" $GITHUB_OUTPUT)" -eq '1' ] ;then
 
   sed -i 's/192.168.1.1/192.168.8.1/g' package/base-files/files/bin/config_generate
   
+  # НОВОЕ: Удаление символов возврата каретки (CRLF) из файла конфигурации
+  sed -i 's/\r//g' ./config/axt1800.config && echo "Successfully removed Windows line endings from axt1800.config" 
+
   rm -rf feeds/packages/lang/golang && echo "Removing old golang"
   git clone https://github.com/sbwml/packages_lang_golang -b 25.x feeds/packages/lang/golang
   cat feeds/packages/lang/golang/golang/Makefile
