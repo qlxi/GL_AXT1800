@@ -1,20 +1,8 @@
- [[CHINESE_TEXT]](https://p3terx.com/archives/build-openwrt-with-github-actions.html)
-
 # Actions-OpenWrt
 
 [![LICENSE](https://img.shields.io/github/license/mashape/apistatus.svg?style=flat-square&label=LICENSE)](https://github.com/P3TERX/Actions-OpenWrt/blob/master/LICENSE)
 ![GitHub Stars](https://img.shields.io/github/stars/P3TERX/Actions-OpenWrt.svg?style=flat-square&label=Stars&logo=github)
 ![GitHub Forks](https://img.shields.io/github/forks/P3TERX/Actions-OpenWrt.svg?style=flat-square&label=Forks&logo=github)
-
-## Usage
-
-- [CHINESE_TEXT]GL-inet AXT-1800(192.168.8.1), TR-3000[CHINESE_TEXT](192.168.6.1)，immortalwrt(192.168.100.1)，[CHINESE_TEXT]。
-- TR-3000 24.10 [CHINESE_TEXT]Tailscale，[CHINESE_TEXT]，WIFI[CHINESE_TEXT]，[CHINESE_TEXT]，[CHINESE_TEXT]
-- AXT1800 [CHINESE_TEXT]Tailscale，[CHINESE_TEXT]，openclash，[CHINESE_TEXT]，mosdns，WIFI[CHINESE_TEXT]，kms[CHINESE_TEXT]，ttyd，quickstart，[CHINESE_TEXT]
-- x86 [CHINESE_TEXT]Wireguard，openclash，[CHINESE_TEXT]，mosdns，kms[CHINESE_TEXT]，ttyd，[CHINESE_TEXT]
-![image](https://github.com/m0eak/Openwrt_Builder/assets/50049180/9671d793-51f8-484c-bae7-9567e3fd5f9c)
-
-
 
 ## Credits
 
