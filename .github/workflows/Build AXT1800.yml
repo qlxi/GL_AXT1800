@@ -1,0 +1,227 @@
+name: Build AXT-1800
+
+on:
+  #schedule:
+  #  - cron: '0 16 * * *'
+  repository_dispatch:
+  workflow_dispatch:
+
+# Fixed: Added permissions for GITHUB_TOKEN
+permissions:
+  contents: write   # required for creating a release
+  actions: read
+  checks: read
+  deployments: read
+  issues: read
+  pull-requests: read
+  repository-projects: read
+  statuses: read
+
+env:
+  REPO_URL_IMM: https://github.com/LiBwrt/openwrt-6.x
+  REPO_BRANCH: 24.10-6.12
+  FEEDS_CONF: feeds.conf.default
+  CONFIG_FILE_IMM: ./config/axt1800.config
+  DIY_P1_SH: ./sh/scripts-part1.sh
+  DIY_P2_SH: ./sh/scripts-part2.sh
+  DEFAULT_SETTING: ./default-settings
+  UPLOAD_BIN_DIR: true
+  UPLOAD_FIRMWARE: true
+  UPLOAD_RELEASE: true
+  CACHE_TOOLCHAIN: true
+  TZ: Europe/Berlin
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@main
+
+    - name: "Optimize Disk Space"
+      uses: "hugoalh/disk-space-optimizer-ghaction@v0.8.1"
+      with:
+        operate_sudo: "True"
+        general_include: ".+"
+        general_exclude: |-
+          ^GCC$
+          ^G\+\+$
+          Clang
+          LLVM
+        docker_include: ".+"
+        docker_prune: "True"
+        docker_clean: "True"
+        apt_prune: "True"
+        apt_clean: "True"
+        homebrew_prune: "True"
+        homebrew_clean: "True"
+        npm_prune: "True"
+        npm_clean: "True"
+        os_swap: "True"
+
+    - name: Initialize environment
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        sudo rm -rf /usr/share/dotnet /etc/apt/sources.list.d /usr/local/lib/android $AGENT_TOOLSDIRECTORY
+        sudo -E apt-get -y purge azure-cli ghc* zulu* llvm* firefox google* dotnet* powershell openjdk* mongodb* moby* || true
+        sudo -E apt-get -y update
+        sudo bash -c 'bash <(curl -s https://build-scripts.immortalwrt.org/init_build_environment.sh)'
+        sudo -E systemctl daemon-reload
+        sudo -E apt-get -y autoremove --purge
+        sudo -E apt-get -y clean
+        sudo timedatectl set-timezone "$TZ"
+        sudo mkdir -p /workdir
+        sudo chown $USER:$GROUPS /workdir
+        echo "WORKFLOW_NAME=AXT-1800" | tr ' ' '_' >> $GITHUB_OUTPUT
+        echo "TAG2=${{ github.event.inputs.tag2 }}" | tr ' ' '_' >> $GITHUB_ENV
+
+    - name: Clone source code
+      working-directory: /workdir
+      run: |
+        df -hT $PWD
+        REPO_URL=$REPO_URL_IMM
+        git clone $REPO_URL --single-branch openwrt
+        ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
+        cd openwrt
+        PROJECT_MIRRORS_FILE="./scripts/projectsmirrors.json"
+        if [ -f "$PROJECT_MIRRORS_FILE" ]; then
+          sed -i '/.cn\//d; /tencent/d; /aliyun/d' "$PROJECT_MIRRORS_FILE"
+        fi
+        git fetch --tags
+        echo "OPENWRT_PATH=$PWD" >> $GITHUB_ENV
+
+    - name: Load custom feeds
+      run: |
+        echo "WORKFLOW_NAME=AXT-1800" | tr ' ' '_' >> $GITHUB_OUTPUT
+        cat $GITHUB_OUTPUT
+        cat $GITHUB_ENV
+        [ -e $FEEDS_CONF ] && mv $FEEDS_CONF openwrt/feeds.conf.default
+        chmod +x $DIY_P1_SH
+        cd openwrt
+        ./scripts/feeds update -a
+        $GITHUB_WORKSPACE/$DIY_P1_SH
+
+    - name: Install feeds
+      run: cd openwrt && ./scripts/feeds install -a
+
+    - name: Load custom configuration
+      run: |
+        echo "WORKFLOW_NAME=AXT-1800" | tr ' ' '_' >> $GITHUB_OUTPUT
+        cat $GITHUB_OUTPUT
+        [ -e $DEFAULT_SETTING ] && mv $DEFAULT_SETTING openwrt/package/default-settings
+        ls openwrt/package/
+        [ -e files ] && mv ./files openwrt/files
+        [ -e $CONFIG_FILE_IMM ] && mv $CONFIG_FILE_IMM openwrt/.config
+        chmod +x $DIY_P2_SH
+        cd openwrt
+        $GITHUB_WORKSPACE/$DIY_P2_SH
+        make defconfig
+        echo "Current diffconfig:"
+        ./scripts/diffconfig.sh    
+
+    - name: Cache Toolchain
+      uses: HiGarfield/cachewrtbuild@main
+      if: env.CACHE_TOOLCHAIN != 'false'
+      with:
+        ccache: true
+        mixkey: ${{ github.workflow }}-${{ env.REPO_BRANCH }}-${{ hashFiles(env.CONFIG_FILE_IMM, '**/scripts-part*.sh') }}
+        prefix: ${{ env.OPENWRT_PATH }}
+    
+    - name: Download packages
+      id: package
+      run: |
+         cd openwrt
+         make download -j8
+         find dl -size -1024c -exec ls -l {} \;
+         find dl -size -1024c -exec rm -f {} \;
+
+    - name: Build firmware
+      id: compile
+      run: |
+        cd openwrt
+        echo "$(nproc) compilation threads"
+        echo "y" | make -j$(expr $(nproc) + 1) || echo "y" | make -j1 V=s
+        echo "compile-status=success" >> $GITHUB_ENV
+        grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
+        [ -s DEVICE_NAME ] && echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> $GITHUB_ENV
+        echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV
+        echo "compile=success" >> $GITHUB_OUTPUT
+        if [ -s DEVICE_NAME ]; then
+          echo "device-name=$(cat DEVICE_NAME)" >> $GITHUB_OUTPUT
+        fi
+        echo "file-date=$(date +"%Y%m%d%H%M")" >> $GITHUB_OUTPUT
+
+    - name: Check disk usage
+      if: (!cancelled())
+      run: df -hT
+
+    - name: Upload bin directory
+      uses: actions/upload-artifact@main
+      if: steps.compile.outputs.compile == 'success' && env.UPLOAD_BIN_DIR == 'true'
+      with:
+        name: OpenWrt_bin_${{ steps.compile.outputs.device-name }}_${{ steps.compile.outputs.file-date }}
+        path: openwrt/bin
+
+    - name: Organize files
+      id: organize
+      if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
+      run: |
+        cd openwrt/bin/targets/*/*
+        rm -rf packages
+        echo "FIRMWARE=$PWD" >> $GITHUB_ENV
+        echo "status=success" >> $GITHUB_ENV
+        echo "organize=success" >> $GITHUB_OUTPUT
+        cat $GITHUB_ENV
+
+    - name: Upload firmware directory
+      uses: actions/upload-artifact@main
+      if: steps.organize.outputs.organize == 'success' && !cancelled()
+      with:
+        name: OpenWrt_firmware${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
+        path: ${{ env.FIRMWARE }}
+
+    - name: Generate release tag
+      id: tag
+      if: steps.compile.outputs.compile == 'success' && env.UPLOAD_RELEASE == 'true'
+      run: |
+        echo "Generating release tag..."
+        CLEANED_WORKFLOW_NAME=$(echo "$WORKFLOW_NAME" | tr -c '[:alnum:]_' '-')
+        CLEANED_TAG2=$(echo "$TAG2" | tr -c '[:alnum:].-' '-')
+        BASE_TAG="${CLEANED_WORKFLOW_NAME}-${CLEANED_TAG2}"
+        DATE_SUFFIX=$(date +"%Y%m%d-%H%M")
+        RELEASE_TAG="${BASE_TAG}-${DATE_SUFFIX}"
+        if [ -z "$RELEASE_TAG" ]; then
+            echo "Error: Generated release tag is empty."
+            exit 1
+        fi
+        echo "release_tag=$RELEASE_TAG" >> $GITHUB_ENV
+        touch release.txt
+        echo "tag=success" >> $GITHUB_OUTPUT
+        echo "Generated release tag: $RELEASE_TAG"
+
+    - name: Release Firmware
+      uses: softprops/action-gh-release@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: immortalwrt_gl-axt1800-nss-${{ env.release_tag }}
+        files: ${{ env.FIRMWARE }}/*
+        body: |
+          Source code: ${{ env.REPO_URL_IMM }}
+
+    - name: Delete workflow runs
+      uses: GitRML/delete-workflow-runs@main
+      with:
+        retain_days: 5
+        keep_minimum_runs: 5
+  
+    - name: Remove old Releases
+      uses: dev-drprasad/delete-older-releases@v0.1.0
+      if: env.UPLOAD_RELEASE == 'true' && !cancelled()
+      with:
+        keep_latest: 10
+        delete_tags: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
